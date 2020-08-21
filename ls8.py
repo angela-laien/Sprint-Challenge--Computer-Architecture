@@ -1,5 +1,5 @@
 import sys
-from cpu import CPU
+from cpu import *
 
 cpu = CPU()
 
