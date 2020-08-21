@@ -5,13 +5,15 @@ LDI = 0b10000010
 PRN = 0b01000111
 MUL = 0b10100010
 ADD = 0b10100000
+SUB = 0b10100001
+DIV = 0b10100011
 PUSH = 0b01000101
 POP = 0b01000110
 CALL = 0b01010000
 RET = 0b00010001
 CMP = 0b10100111
 JMP = 0b01010100
-JEQ = 0b01010110
+JEQ = 0b01010101
 JNE = 0b01010110
 
 class CPU:
@@ -24,13 +26,15 @@ class CPU:
             0b01000111: self.PRN,
             0b10100010: self.MUL,
             0b10100000: self.ADD,
+            0b10100001: self.SUB,
+            0b10100011: self.DIV,
             0b01000101: self.PUSH,
             0b01000110: self.POP,
             0b01010000: self.CALL,
             0b00010001: self.RET,
             0b10100111: self.CMP,
             0b01010100: self.JMP,
-            0b01010110: self.JEQ,
+            0b01010101: self.JEQ,
             0b01010110: self.JNE
         }
 
@@ -45,13 +49,15 @@ class CPU:
         self.reg[self.sp] = 0xF4
 
         self.fl = 0b00000000
+        
+        self.running = False
 
     def load(self):
 
         address = 0
     
         try:
-            with open("sctest.ls8", "r") as f:
+            with open(sys.argv[1]) as f:
                 for line in f:
                     comment_split = line.split("#")
                     n = comment_split[0].strip()
@@ -96,6 +102,21 @@ class CPU:
         self.reg[operand_a] = self.reg[operand_a] * self.reg[operand_b]
         self.pc += 3
 
+    def SUB(self):
+        operand_a = self.ram[self.pc + 1]
+        operand_b = self.ram[self.pc + 2]
+        self.reg[operand_a] -= self.reg[operand_b]
+        self.pc += 3
+
+    def DIV(self):
+        operand_a = self.ram[self.pc + 1]
+        operand_b = self.ram[self.pc + 2]
+        if operand_b == 0:
+            self.table[0b00000001]()
+        else:
+            self.reg[operand_a] = self.reg[operand_a] // self.reg[operand_b]
+            self.pc += 3
+
     def PUSH(self):
         operand_a = self.ram[self.pc + 1]
         self.reg[self.sp] -= 1
@@ -119,10 +140,8 @@ class CPU:
 
     def RET(self):
         # pop the return address from stack and set to pc
-        return_address = self.ram[self.reg[self.sp]]
+        self.pc = self.ram[self.reg[self.sp]]
         self.reg[self.sp] += 1
-
-        self.pc = return_address
 
     def CMP(self):
         operand_a = self.ram[self.pc + 1]
@@ -136,6 +155,7 @@ class CPU:
             self.fl = 0b00000010
         else:
             self.fl = 0b00000100
+        self.pc += 3
     
     def JMP(self):
         # jump to address in the given register
@@ -143,11 +163,10 @@ class CPU:
         # set pc to that address
         self.pc = self.reg[operand_a]
 
-    def JNE(self, operand_a):
+    def JNE(self):
         operand_a = self.ram[self.pc + 1]
         # if equal flag is false
-        v = self.reg[self.fl]
-        if v == 0b00000000:
+        if self.fl & 0b00000001 == 0:
             # jump to address in the given register
             self.pc = self.reg[operand_a]
         else:
@@ -155,13 +174,14 @@ class CPU:
 
     def JEQ(self):
         operand_a = self.ram[self.pc + 1]
-        if self.reg[self.fl] == 1:
+        if self.fl & 0b00000001 == 1:
             self.pc = self.reg[operand_a]
         else:
             self.pc += 2
 
     def HLT(self):
         self.running = False
+        self.pc += 1
 
     def run(self):
 
@@ -169,8 +189,8 @@ class CPU:
 
         while self.running:
             ir = self.ram[self.pc]
-            # if ir in self.table:
-            instruction = self.table[ir]
-            instruction()
-            # else:
-            #     self.running = False
+            if ir in self.table:
+                instruction = self.table[ir]
+                instruction()
+            else:
+                self.running = False
